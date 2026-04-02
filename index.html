@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Type play</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIQUID LAB | PRO ULTRA HD</title>
+    <!-- 引入 Three.js 用于处理 GLB 模型 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #000000;
+            --text-mute: #999999;
+            --border: rgba(0,0,0,0.05);
+            --sidebar-bg: #F2D9DE; 
+            --canvas-area-bg: #000000; 
+        }
+
+        * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        
+        body, html { 
+            margin: 0; padding: 0; height: 100%; 
+            background: var(--bg); 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "PingFang SC", sans-serif; 
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        .app-container { display: flex; height: 100vh; width: 100vw; }
+
+        .sidebar {
+            width: 320px; height: 100%;
+            border-right: 1px solid var(--border);
+            padding: 48px 32px;
+            display: flex; flex-direction: column; 
+            gap: 24px;
+            overflow-y: auto; 
+            background: var(--sidebar-bg);
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .main-content {
+            flex: 1; 
+            background: var(--canvas-area-bg); 
+            display: flex; align-items: center; justify-content: center;
+            padding: 40px;
+            position: relative;
+        }
+
+        .viewer-frame {
+            height: 100%;
+            max-height: 85vh;
+            aspect-ratio: 3/4; 
+            background: transparent;
+            display: flex; align-items: center; justify-content: center;
+            border: none;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 优化：确保Canvas可被右键识别 */
+        canvas#fluidCanvas { 
+            width: 100%; height: 100%; object-fit: contain; 
+            display: none; cursor: default;
+            touch-action: none;
+        }
+
+        /* 隐藏的导出中转图，用于增强右键复制兼容性 */
+        #copyOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0; pointer-events: all; display: none;
+        }
+
+        .controls { display: flex; flex-direction: column; gap: 24px; }
+
+        .btn-upload {
+            display: block; width: 100%; padding: 16px;
+            background: #000; color: #fff;
+            text-align: center; border: 1px solid #000;
+            cursor: pointer; font-size: 10px; font-weight: 700;
+            letter-spacing: 1.5px; text-transform: uppercase;
+        }
+
+        .bg-upload-group { display: flex; gap: 8px; align-items: center; }
+
+        .btn-upload-bg {
+            flex-grow: 1; padding: 10px;
+            background: rgba(255,255,255,0.3); color: #000;
+            text-align: center; border: 1px solid rgba(0,0,0,0.1);
+            cursor: pointer; font-size: 9px; font-weight: 700;
+            letter-spacing: 1px; text-transform: uppercase;
+        }
+
+        .btn-remove-bg {
+            width: 34px; height: 34px;
+            background: #000; color: #fff;
+            border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: bold;
+        }
+
+        .control-panel { display: flex; flex-direction: column; gap: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .color-control-group { margin-top: -8px; }
+
+        .label-row { 
+            display: flex; justify-content: space-between; align-items: baseline;
+            font-size: 11px; font-weight: 700;
+        }
+        .title-box { display: flex; align-items: baseline; gap: 6px; }
+        .title-en { font-size: 9px; color: rgba(0,0,0,0.4); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+        .value-label { color: var(--text); font-weight: 800; font-size: 12px; font-family: "Monaco", monospace; }
+
+        input[type="range"] {
+            -webkit-appearance: none; width: 100%; height: 2px;
+            background: rgba(0,0,0,0.1); outline: none; margin: 8px 0;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 10px; height: 10px;
+            background: var(--text); cursor: pointer; border-radius: 0;
+        }
+
+        .color-inputs { 
+            display: flex; align-items: center; width: 100%; 
+            border: 1px solid rgba(0,0,0,0.1); background: #fff;
+        }
+        input[type="color"] {
+            -webkit-appearance: none; border: none;
+            width: 50px; height: 32px; background: none; padding: 0; cursor: pointer;
+            border-right: 1px solid rgba(0,0,0,0.1);
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; }
+
+        input[type="text"]#bgColorHex {
+            flex-grow: 1; height: 32px; border: none;
+            font-size: 10px; font-family: "Monaco", monospace;
+            text-align: center; color: #000; font-weight: 700; outline: none;
+            text-transform: uppercase; background: transparent; letter-spacing: 1.5px;
+        }
+
+        .export-section { margin-top: 8px; }
+        .export-label {
+            font-size: 11px; font-weight: 700;
+            display: flex; align-items: baseline; justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .export-title-wrap { display: flex; align-items: baseline; gap: 6px; }
+
+        .btn-reset {
+            background: none; border: none; color: rgba(0,0,0,0.4);
+            font-size: 9px; font-weight: 700; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 0; transition: color 0.2s;
+        }
+        .btn-reset:hover { color: #ff4d4f; }
+
+        .dl-btns { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 12px;
+        }
+        .dl-btns button { 
+            background: #000; border: 1px solid #000; 
+            padding: 14px; font-size: 10px; font-weight: 700; cursor: pointer; 
+            color: #fff; display: flex; justify-content: center; align-items: baseline; gap: 4px;
+            transition: all 0.3s; position: relative; overflow: hidden;
+        }
+        .dl-btns button:disabled { background: #666; cursor: wait; }
+        .dl-btns button:hover:not(:disabled) { opacity: 0.8; }
+
+        .sidebar-footer { 
+            margin-top: auto; 
+            padding-top: 32px; 
+            font-size: 9px; 
+            color: rgba(0,0,0,0.4); 
+            text-align: center; 
+        }
+
+        .hidden { display: none; }
+
+        @media (max-width: 900px) {
+            .app-container { flex-direction: column; overflow-y: auto; }
+            .sidebar { width: 100%; height: auto; border-right: none; }
+            .main-content { height: 600px; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <aside class="sidebar">
+        <div class="controls">
+            <section>
+                <input type="file" id="fileIn" class="hidden" accept="image/*,video/*,.glb,.gltf">
+                <label for="fileIn" class="btn-upload">上传图片 | IMPORT</label>
+            </section>
+
+            <div class="control-panel">
+                <div class="control-group">
+                    <div class="label-row"><div class="title-box"><span class="title-cn">液态聚拢</span><span class="title-en">Fluidity</span></div><span class="value-label" id="v-fluid">40</span></div>
+                    <input type="range" id="fluid" min="10" max="80" value="40">
+                </div>
+                <div class="control-group">
+                    <div class="label-row"><div class="title-box"><span class="title-cn">边缘张力</span><span class="title-en">Tension</span></div><span class="value-label" id="v-tension">150</span></div>
+                    <input type="range" id="tension" min="100" max="600" value="150">
+                </div>
+                <div class="control-group">
+                    <div class="label-row"><div class="title-box"><span class="title-cn">色彩鲜艳度</span><span class="title-en">Vibrancy</span></div><span class="value-label" id="v-sat">180%</span></div>
+                    <input type="range" id="sat" min="100" max="400" value="180">
+                </div>
+                <div class="control-group">
+                    <div class="label-row"><div class="title-box"><span class="title-cn">大小缩放</span><span class="title-en">Scale</span></div><span class="value-label" id="v-scale">100%</span></div>
+                    <input type="range" id="scale" min="10" max="300" value="100">
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row"><div class="title-box"><span class="title-cn">主体阈值</span><span class="title-en">Threshold</span></div><span class="value-label" id="v-threshold">245</span></div>
+                    <input type="range" id="threshold" min="0" max="255" value="245">
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row"><div class="title-box"><span class="title-cn">画布背景图</span><span class="title-en">Canvas BG</span></div></div>
+                    <div class="bg-upload-group">
+                        <input type="file" id="bgFileIn" class="hidden" accept="image/*">
+                        <label for="bgFileIn" class="btn-upload-bg">上传背景 | UPLOAD</label>
+                        <button id="removeBg" class="btn-remove-bg hidden">✕</button>
+                    </div>
+                </div>
+
+                <div class="control-group color-control-group">
+                    <div class="color-inputs">
+                        <input type="color" id="bgColor" value="#ffffff">
+                        <input type="text" id="bgColorHex" value="#FFFFFF" spellcheck="false">
+                    </div>
+                </div>
+            </div>
+
+            <div class="export-section">
+                <div class="export-label">
+                    <div class="export-title-wrap">
+                        <span class="title-cn">导出</span><span class="title-en">Export</span>
+                    </div>
+                    <button class="btn-reset" onclick="resetTool()">Reset</button>
+                </div>
+                <div class="dl-btns">
+                    <button onclick="download('jpg', this)"><span>JPG</span></button>
+                    <button onclick="download('png', this)"><span>PNG</span></button>
+                </div>
+            </div>
+        </div>
+        <footer class="sidebar-footer">2026 © Designed by Type Play.</footer>
+    </aside>
+
+    <main class="main-content">
+        <div class="viewer-frame" id="vFrame">
+            <canvas id="fluidCanvas"></canvas>
+            <!-- 增加：用于支持右键复制的透明图层 -->
+            <img id="copyOverlay" alt="Right click to copy">
+        </div>
+    </main>
+</div>
+
+<canvas id="sourceCanvas" class="hidden"></canvas>
+<canvas id="offCanvas" class="hidden"></canvas>
+<video id="sourceVideo" class="hidden" loop muted playsinline></video>
+
+<script>
+    const fileIn = document.getElementById('fileIn');
+    const bgFileIn = document.getElementById('bgFileIn');
+    const removeBgBtn = document.getElementById('removeBg');
+    const canvas = document.getElementById('fluidCanvas');
+    const ctx = canvas.getContext('2d');
+    const copyOverlay = document.getElementById('copyOverlay');
+    const vFrame = document.getElementById('vFrame');
+    const sourceCanvas = document.getElementById('sourceCanvas');
+    const sCtx = sourceCanvas.getContext('2d');
+    const offCanvas = document.getElementById('offCanvas');
+    const offCtx = offCanvas.getContext('2d');
+    const sourceVideo = document.getElementById('sourceVideo');
+    const bgColorInput = document.getElementById('bgColor');
+    const bgColorHexInput = document.getElementById('bgColorHex');
+
+    let activeType = 'none', activeImg = new Image(), bgImg = new Image();
+    let loaded = false, bgLoaded = false;
+    let offsetX = 0, offsetY = 0, isDragging = false, startX, startY;
+    
+    let scene, camera, renderer, model;
+
+    const PREVIEW_W = 1200, PREVIEW_H = 1600;
+    const EXPORT_W = 4800, EXPORT_H = 6400; 
+
+    function tick() {
+        renderLiquid();
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // 优化：右键复制支持 - 仅在鼠标松开或操作停止时更新，保证性能
+    function updateCopySource() {
+        if(!loaded && !bgLoaded) return;
+        copyOverlay.src = canvas.toDataURL('image/png');
+        copyOverlay.style.display = 'block';
+    }
+
+    bgColorInput.oninput = () => {
+        bgColorHexInput.value = bgColorInput.value.toUpperCase();
+    };
+
+    bgFileIn.onchange = (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            bgImg.onload = () => { 
+                bgLoaded = true; 
+                removeBgBtn.classList.remove('hidden');
+                setTimeout(updateCopySource, 500);
+            };
+            bgImg.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    removeBgBtn.onclick = () => {
+        bgLoaded = false; bgImg.src = ''; bgFileIn.value = '';
+        removeBgBtn.classList.add('hidden');
+        updateCopySource();
+    };
+
+    fileIn.onchange = (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+        const url = URL.createObjectURL(file);
+        const fileName = file.name.toLowerCase();
+
+        resetCurrentAsset();
+
+        if (fileName.endsWith('.glb') || fileName.endsWith('.gltf')) {
+            initThreeJS(url);
+            activeType = 'glb';
+        } else if (file.type.startsWith('video/')) {
+            sourceVideo.src = url;
+            sourceVideo.onloadedmetadata = () => {
+                sourceVideo.play();
+                activeType = 'video';
+                loaded = true;
+            };
+        } else {
+            activeImg.onload = () => {
+                activeType = 'image';
+                loaded = true;
+                setTimeout(updateCopySource, 500);
+            };
+            activeImg.src = url;
+        }
+        
+        canvas.style.display = 'block';
+        [canvas, sourceCanvas, offCanvas].forEach(c => { c.width = PREVIEW_W; c.height = PREVIEW_H; });
+    };
+
+    function resetCurrentAsset() {
+        loaded = false;
+        sourceVideo.pause();
+        sourceVideo.src = "";
+        activeType = 'none';
+        if(model && scene) scene.remove(model);
+        copyOverlay.style.display = 'none';
+    }
+
+    function initThreeJS(url) {
+        if (!scene) {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, PREVIEW_W / PREVIEW_H, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(PREVIEW_W, PREVIEW_H);
+            renderer.setClearColor(0x000000, 0); 
+            camera.position.z = 5;
+            scene.add(new THREE.AmbientLight(0xffffff, 1));
+            const sun = new THREE.DirectionalLight(0xffffff, 2);
+            sun.position.set(5, 5, 5);
+            scene.add(sun);
+        }
+        new THREE.GLTFLoader().load(url, (gltf) => {
+            model = gltf.scene;
+            scene.add(model);
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3()).length();
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center);
+            const scale = 4.0 / size;
+            model.scale.set(scale, scale, scale);
+            loaded = true;
+        });
+    }
+
+    function renderLiquid() {
+        const bg = bgColorInput.value;
+        vFrame.style.backgroundColor = bg;
+        ctx.clearRect(0, 0, PREVIEW_W, PREVIEW_H);
+        if(!loaded && !bgLoaded) return;
+
+        const fluid = parseFloat(document.getElementById('fluid').value);
+        const tension = document.getElementById('tension').value;
+        const sat = document.getElementById('sat').value;
+        const zoom = parseFloat(document.getElementById('scale').value) / 100;
+        const threshold = parseInt(document.getElementById('threshold').value);
+
+        document.getElementById('v-fluid').innerText = fluid;
+        document.getElementById('v-tension').innerText = tension;
+        document.getElementById('v-sat').innerText = sat + '%';
+        document.getElementById('v-scale').innerText = Math.round(zoom * 100) + '%';
+        document.getElementById('v-threshold').innerText = threshold;
+
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, PREVIEW_W, PREVIEW_H);
+
+        if(bgLoaded) drawImageCover(ctx, bgImg, PREVIEW_W, PREVIEW_H);
+
+        if(loaded) {
+            sCtx.clearRect(0, 0, PREVIEW_W, PREVIEW_H);
+            if (activeType === 'video') {
+                const vRatio = sourceVideo.videoWidth / sourceVideo.videoHeight;
+                const vh = PREVIEW_H; 
+                const vw = vh * vRatio; 
+                sCtx.drawImage(sourceVideo, (PREVIEW_W - vw) / 2, 0, vw, vh);
+            } else if (activeType === 'glb') {
+                if(model) model.rotation.y += 0.01;
+                renderer.render(scene, camera);
+                sCtx.drawImage(renderer.domElement, 0, 0);
+            } else {
+                const scale = Math.min(PREVIEW_W / activeImg.width, PREVIEW_H / activeImg.height) * 0.8;
+                const w = activeImg.width * scale, h = activeImg.height * scale;
+                sCtx.drawImage(activeImg, (PREVIEW_W - w) / 2, (PREVIEW_H - h) / 2, w, h);
+            }
+
+            const imgData = sCtx.getImageData(0, 0, PREVIEW_W, PREVIEW_H), data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] > threshold && data[i+1] > threshold && data[i+2] > threshold) data[i+3] = 0;
+            }
+            sCtx.putImageData(imgData, 0, 0);
+
+            offCtx.clearRect(0, 0, PREVIEW_W, PREVIEW_H);
+            offCtx.save();
+            offCtx.translate(PREVIEW_W/2 + offsetX, PREVIEW_H/2 + offsetY);
+            offCtx.scale(zoom, zoom);
+            offCtx.translate(-PREVIEW_W/2, -PREVIEW_H/2);
+            // 兼容性处理：Safari filter
+            const filterStr = `blur(${fluid}px) saturate(${sat}%)`;
+            offCtx.filter = filterStr;
+            offCtx.drawImage(sourceCanvas, 0, 0);
+            offCtx.restore();
+
+            const buffer = document.createElement('canvas');
+            buffer.width = PREVIEW_W; buffer.height = PREVIEW_H;
+            const bCtx = buffer.getContext('2d');
+            bCtx.filter = `contrast(${tension}%)`;
+            bCtx.drawImage(offCanvas, 0, 0);
+
+            ctx.save();
+            ctx.filter = 'blur(1.2px)';
+            ctx.drawImage(buffer, -10, -10, PREVIEW_W + 20, PREVIEW_H + 20);
+            ctx.restore();
+        }
+    }
+
+    function drawImageCover(tCtx, img, tw, th) {
+        const sc = Math.max(tw/img.width, th/img.height);
+        const bw = img.width*sc, bh = img.height*sc;
+        tCtx.drawImage(img, (tw-bw)/2, (th-bh)/2, bw, bh);
+    }
+
+    function resetTool() {
+        resetCurrentAsset();
+        bgLoaded = false; bgImg.src = ''; bgFileIn.value = '';
+        fileIn.value = ''; offsetX = 0; offsetY = 0;
+        document.getElementById('fluid').value = 40;
+        document.getElementById('tension').value = 150;
+        document.getElementById('sat').value = 180;
+        document.getElementById('scale').value = 100;
+        document.getElementById('threshold').value = 245;
+        bgColorInput.value = '#ffffff';
+        bgColorHexInput.value = '#FFFFFF';
+        canvas.style.display = 'none';
+        removeBgBtn.classList.add('hidden');
+    }
+
+    // 优化：丝滑进度展示逻辑
+    async function smoothProgress(btn, start, end, duration) {
+        const startTime = performance.now();
+        return new Promise(res => {
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const currentVal = Math.floor(start + (end - start) * progress);
+                btn.innerText = `${currentVal}%`;
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                } else {
+                    res();
+                }
+            }
+            requestAnimationFrame(update);
+        });
+    }
+
+    async function download(ext, btn) {
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        
+        try {
+            // 第一阶段进度：准备中 (0-20%)
+            await smoothProgress(btn, 0, 20, 400);
+
+            const scaleFactor = EXPORT_W / PREVIEW_W;
+            const fluid = parseFloat(document.getElementById('fluid').value) * scaleFactor;
+            const tension = document.getElementById('tension').value;
+            const sat = document.getElementById('sat').value;
+            const zoom = parseFloat(document.getElementById('scale').value) / 100;
+            const bg = bgColorInput.value;
+            const threshold = parseInt(document.getElementById('threshold').value);
+
+            // 第二阶段进度：渲染环境初始化 (20-40%)
+            await smoothProgress(btn, 20, 40, 400);
+
+            const eCanvas = document.createElement('canvas');
+            eCanvas.width = EXPORT_W; eCanvas.height = EXPORT_H;
+            const eCtx = eCanvas.getContext('2d');
+
+            const eSource = document.createElement('canvas');
+            eSource.width = EXPORT_W; eSource.height = EXPORT_H;
+            const esCtx = eSource.getContext('2d');
+
+            const eOff = document.createElement('canvas');
+            eOff.width = EXPORT_W; eOff.height = EXPORT_H;
+            const eoCtx = eOff.getContext('2d');
+
+            if (ext === 'jpg') {
+                eCtx.fillStyle = bg;
+                eCtx.fillRect(0, 0, EXPORT_W, EXPORT_H);
+                if(bgLoaded) drawImageCover(eCtx, bgImg, EXPORT_W, EXPORT_H);
+            }
+
+            // 第三阶段：核心像素处理 (40-85%)
+            await smoothProgress(btn, 40, 85, 1200);
+
+            if(loaded) {
+                if (activeType === 'video') {
+                    const vRatio = sourceVideo.videoWidth / sourceVideo.videoHeight;
+                    const vh = EXPORT_H; 
+                    const vw = vh * vRatio; 
+                    esCtx.drawImage(sourceVideo, (EXPORT_W - vw) / 2, 0, vw, vh);
+                } else if (activeType === 'glb') {
+                    renderer.setSize(EXPORT_W, EXPORT_H);
+                    renderer.render(scene, camera);
+                    esCtx.drawImage(renderer.domElement, 0, 0);
+                    renderer.setSize(PREVIEW_W, PREVIEW_H);
+                } else {
+                    const scale = Math.min(EXPORT_W / activeImg.width, EXPORT_H / activeImg.height) * 0.8;
+                    const w = activeImg.width * scale, h = activeImg.height * scale;
+                    esCtx.drawImage(activeImg, (EXPORT_W - w) / 2, (EXPORT_H - h) / 2, w, h);
+                }
+
+                const imgData = esCtx.getImageData(0, 0, EXPORT_W, EXPORT_H), data = imgData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i] > threshold && data[i+1] > threshold && data[i+2] > threshold) data[i+3] = 0;
+                }
+                esCtx.putImageData(imgData, 0, 0);
+
+                eoCtx.save();
+                eoCtx.translate(EXPORT_W/2 + offsetX * scaleFactor, EXPORT_H/2 + offsetY * scaleFactor);
+                eoCtx.scale(zoom, zoom);
+                eoCtx.translate(-EXPORT_W/2, -EXPORT_H/2);
+                eoCtx.filter = `blur(${fluid}px) saturate(${sat}%)`;
+                eoCtx.drawImage(eSource, 0, 0);
+                eoCtx.restore();
+
+                const eBuffer = document.createElement('canvas');
+                eBuffer.width = EXPORT_W; eBuffer.height = EXPORT_H;
+                const ebCtx = eBuffer.getContext('2d');
+                ebCtx.filter = `contrast(${tension}%)`;
+                ebCtx.drawImage(eOff, 0, 0);
+
+                eCtx.save();
+                eCtx.filter = `blur(${1.2 * scaleFactor}px)`;
+                eCtx.drawImage(eBuffer, -20, -20, EXPORT_W + 40, EXPORT_H + 40);
+                eCtx.restore();
+            }
+
+            // 第四阶段：编码与封装 (85-100%)
+            await smoothProgress(btn, 85, 99, 600);
+
+            const link = document.createElement('a');
+            link.download = `LiquidLab_UltraHD_${Date.now()}.${ext}`;
+            // 针对 Safari 和 Chrome 的 Blob 转换优化
+            eCanvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                link.href = url;
+                link.click();
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                    btn.innerText = "100%";
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }, 500);
+                }, 100);
+            }, ext === 'png' ? 'image/png' : 'image/jpeg', 0.95);
+
+        } catch (e) {
+            console.error(e);
+            alert("Export failed. Memory limit reached.");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    // 交互监听
+    const startDrag = (e) => { 
+        if(!loaded) return; 
+        isDragging = true; 
+        startX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX; 
+        startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY; 
+        canvas.style.cursor = 'grabbing';
+        copyOverlay.style.display = 'none'; // 移动时隐藏复制层
+    };
+    
+    const moveDrag = (e) => {
+        if(!isDragging) return;
+        const currentX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        const rect = canvas.getBoundingClientRect();
+        offsetX += (currentX - startX) * (PREVIEW_W / rect.width);
+        offsetY += (currentY - startY) * (PREVIEW_H / rect.height);
+        startX = currentX; startY = currentY;
+    };
+
+    const endDrag = () => { 
+        if(isDragging) {
+            isDragging = false; 
+            canvas.style.cursor = 'default';
+            updateCopySource(); // 停止操作后更新右键源
+        }
+    };
+
+    canvas.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', moveDrag);
+    window.addEventListener('mouseup', endDrag);
+    
+    // 移动端兼容
+    canvas.addEventListener('touchstart', startDrag, {passive:false});
+    window.addEventListener('touchmove', moveDrag, {passive:false});
+    window.addEventListener('touchend', endDrag);
+
+    // 初始右键源准备
+    setTimeout(updateCopySource, 2000);
+</script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
